@@ -1,0 +1,75 @@
+GCP_PROJECT=fresh-runway-246001
+APP_NAME=neelsmlapp
+REGION="us-central1"
+MEMORY=2G
+
+
+# set project to correct one
+gcloud config set project $GCP_PROJECT
+
+# build and run
+gcloud builds submit --tag gcr.io/$GCP_PROJECT/$APP_NAME --timeout=82800 && gcloud beta run deploy $APP_NAME --image gcr.io/$GCP_PROJECT/$APP_NAME --region $REGION --memory $MEMORY --allow-unauthenticated
+
+gcloud run services update run.googleapis.com --memory 3G
+
+
+# local
+cloud-build-local $APP_NAME --dryrun=false --push gcr.io/$GCP_PROJECT/$APP_NAME
+
+
+# create key
+gcloud iam service-accounts keys create key.json \
+  --iam-account spot-parking-parkinglot@spot-parking-parkinglot.iam.gserviceaccount.com
+
+
+# heroku 
+APP_NAME=object-detection-9991
+heroku create $APP_NAME
+heroku container:login
+heroku container:push web --app $APP_NAME && heroku container:release web --app $APP_NAME && heroku logs --tail --app $APP_NAME
+
+
+# download model
+wget -P . "https://drive.google.com/file/d/1eayobl8rd6040qCcHI_CrVXHte2RGD_m/view?usp=sharing"
+
+
+# docker
+# build and run (see logs)
+docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q) &&
+docker rmi $(docker images | grep '^<none>' | awk '{print $3}') &&
+docker build . -f Dockerfile -t detectron2 && docker run -d -p 8080:8080 detectron2 && docker logs -f -t $(docker ps -q)
+
+
+## build and run (see stats)
+docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q) &&
+docker rmi $(docker images | grep '^<none>' | awk '{print $3}') &&
+docker build . -f Dockerfile -t detectron2 && docker run -d -p 8080:8080 detectron2 && docker stats $(docker ps -q)
+
+
+# stop and remove all containers and delete all unwanted containers
+docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q) &&
+docker rmi $(docker images | grep '^<none>' | awk '{print $3}')
+
+
+# push container to DockerHub
+USERNAME=spiyer99
+IMAGE_NAME=detectron2
+docker tag $(docker images -f reference=$IMAGE_NAME -q) $USERNAME/$IMAGE_NAME:latest && docker push $USERNAME/$IMAGE_NAME
+
+
+# gitignore
+find . -size +50MB | cat >> .gitignore
+
+
+python3 demo/demo.py  \
+	--config-file configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml \
+	--input input.jpg --output outputs/ \
+	--opts MODEL.WEIGHTS detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl
+
+
+
+# return send_file(result_img,attachment_filename='image.jpg',mimetype='image/jpg')
+# return send_file(text, attachment_filename='filename.txt',mimetype='text/plain')
+# send_from_directory(directory = os.getcwd(), filename = text.split('/')[-1], as_attachment=True)
+# return send_from_directory(directory = os.getcwd(), filename = img.split('/')[-1], as_attachment=True) 
+
